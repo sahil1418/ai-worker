@@ -134,7 +134,8 @@ export class OpenAICompatibleLLM implements LLM {
         onWait?.(`Rate limited${multi ? " on every key/model" : " by LLM provider"}; waiting ${(waitMs / 1000).toFixed(1)}s`);
         await sleep(waitMs);
       }
-      if (lastModel && model !== lastModel) onWait?.(`Switching to fallback model ${model}`);
+      if (lastModel && model !== lastModel)
+        onWait?.(model === this.pool.models[0] ? `Back on the primary model ${model}` : `Switching to fallback model ${model}`);
       lastModel = model;
       let res: Response;
       try {

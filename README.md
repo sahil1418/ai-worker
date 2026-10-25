@@ -52,7 +52,7 @@ Other ways to run:
 | `npm run typecheck` | TypeScript check. |
 
 `LLM_API_KEY` also accepts several comma-separated keys, and `LLM_MODEL` several comma-separated models in
-priority order (default: `openai/gpt-oss-120b,llama-3.3-70b-versatile`). The first model is used across all
+priority order (default: `openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b`). The first model is used across all
 keys round-robin; a rate-limited key/model is parked while the next takes over, and the fallback model is
 used only when every key is limited on the primary one. Extra keys only help if they have separate quotas
 (Groq's limits are per organisation); Groq's limits are also per model, so the fallback model adds real quota.
