@@ -1,5 +1,8 @@
 # AI Task Worker
 
+**Live demo:** https://ai-task-worker-t28m.onrender.com (free tier: the first visit after idle takes about a minute
+to wake up; runs take a few minutes because of free LLM rate limits)
+
 A prototype **autonomous AI worker**. You describe an outcome in plain language; it plans, operates real
 (simulated) company systems through a **browser, a REST API and a file system**, watches what happens,
 recovers from errors, asks you before risky actions or when it shouldn't guess, and finally has an

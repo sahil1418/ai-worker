@@ -6,6 +6,7 @@ import { createMockco } from "../src/mockco/app.js";
 import { Run, runTask } from "../src/agent/worker.js";
 import { closeSharedBrowser } from "../src/agent/tools/browser.js";
 import { truncateSnapshot } from "../src/agent/tools/snapshot.js";
+import { ToolFormatError } from "../src/agent/llm.js";
 import type { RunEvent } from "../src/agent/types.js";
 
 const mockco = createMockco({ chaos: true });
@@ -246,12 +247,34 @@ test("a finish written as plain JSON text is still recognised", async () => {
   assert.equal(result.steps, 1, "no extra nudge turn");
 });
 
-test("the first turn forces update_plan via tool_choice", async () => {
+test("planning: turn 1 only asks; if the model skipped the plan, turn 2 forces update_plan", async () => {
   const seen: (string | undefined)[] = [];
-  const llm = new ScriptedLLM([{ calls: [["update_plan", plan]] }, { calls: [["finish", { outcome: "failed", summary: "x" }]] }]);
+  const llm = new ScriptedLLM([
+    { calls: [["list_files", {}]] },
+    { calls: [["update_plan", plan]] },
+    { calls: [["finish", { outcome: "failed", summary: "x" }]] },
+  ]);
   const spy = { chat: (m: any, t: any, o?: { forceTool?: string }) => (seen.push(o?.forceTool), llm.chat(m)) };
   await runTask(new Run("t", "never"), spy);
-  assert.deepEqual(seen, ["update_plan", undefined]);
+  assert.deepEqual(seen, [undefined, "update_plan", undefined]);
+});
+
+test("a malformed reply while a tool is forced is retried without forcing", async () => {
+  const seen: (string | undefined)[] = [];
+  const llm = new ScriptedLLM([
+    { calls: [["list_files", {}]] },
+    { calls: [["update_plan", plan]] },
+    { calls: [["finish", { outcome: "failed", summary: "x" }]] },
+  ]);
+  const spy = {
+    chat: async (m: any, t: any, o?: { forceTool?: string }) => {
+      seen.push(o?.forceTool);
+      if (o?.forceTool) throw new ToolFormatError("tool_use_failed");
+      return llm.chat(m);
+    },
+  };
+  await runTask(new Run("t", "never"), spy);
+  assert.deepEqual(seen, [undefined, "update_plan", undefined, undefined]);
 });
 
 test("snapshot truncation keeps buttons and alerts even at the bottom of a long page", () => {

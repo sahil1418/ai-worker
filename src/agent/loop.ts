@@ -11,6 +11,8 @@ export async function nextMove(llm: LLM, run: Run, messages: ChatMessage[], tool
       return await llm.chat(messages, toSpecs(tools), { onWait, forceTool });
     } catch (e) {
       if (!(e instanceof ToolFormatError) || attempt >= 2) throw e;
+      // Some models (e.g. gpt-oss on Groq) garble output when a specific tool is forced; retry unforced.
+      forceTool = undefined;
       run.emitEvent({ type: "recovery", text: "Model produced a malformed tool call; asking it to retry." }, actor);
       messages.push({
         role: "user",

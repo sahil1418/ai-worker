@@ -160,6 +160,8 @@ export class OpenAICompatibleLLM implements LLM {
       if (res.status === 429) {
         // Park this key; the next acquire() moves on to another key right away if one is free.
         this.pool.cooldown(index, delay);
+        if (/per day|TPD|RPD/i.test(body))
+          onWait?.(`Daily LLM quota${label(index)} nearly used up; the provider asks to wait ${(delay / 60000).toFixed(1)} min. Add another key or switch LLM_MODEL to continue sooner.`);
         if (this.pool.size > 1) onWait?.(`Rate limited${label(index)}; switching key`);
       } else {
         onWait?.(`LLM provider error ${res.status}${label(index)}; waiting ${(delay / 1000).toFixed(1)}s`);

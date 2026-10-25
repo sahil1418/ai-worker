@@ -121,7 +121,7 @@ export async function runTask(run: Run, llm: LLM = new OpenAICompatibleLLM()): P
   ];
   const messages: ChatMessage[] = [
     { role: "system", content: "" },
-    { role: "user", content: `Task from the user:\n"""${run.task}"""` },
+    { role: "user", content: `Task from the user:\n"""${run.task}"""\n\nStart by calling update_plan.` },
   ];
   const guard = new LoopGuard();
   let nudges = 0;
@@ -142,8 +142,9 @@ export async function runTask(run: Run, llm: LLM = new OpenAICompatibleLLM()): P
 
       messages[0] = { role: "system", content: workerSystemPrompt(env, run.plan, run.memory) };
       compactHistory(messages);
-      // Planning first is a rule, not a suggestion: force it while no plan exists (first two turns).
-      const res = await nextMove(llm, run, messages, tools, "worker", !run.plan && step <= 2 ? "update_plan" : undefined);
+      // Planning first is a rule: the task message asks for it, and if the model skipped it on turn 1 we
+      // force it on turn 2 (forcing on turn 1 makes some models emit malformed calls).
+      const res = await nextMove(llm, run, messages, tools, "worker", !run.plan && step === 2 ? "update_plan" : undefined);
       if (!res.toolCalls.length && res.content) {
         // Weaker models sometimes write the finish call as plain JSON text instead of calling the tool.
         const finish = textualFinish(res.content);
