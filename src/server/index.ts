@@ -39,7 +39,7 @@ app.use("/runs", express.static(config.runsDir));
 
 app.get("/api/config", (_req, res) => {
   res.json({
-    model: config.llm.model,
+    model: config.llm.models.join(" → "),
     llmHost: new URL(config.llm.baseUrl).host,
     hasApiKey: config.llm.apiKeys.length > 0 || /localhost|127\.0\.0\.1/.test(config.llm.baseUrl),
     approvalMode: config.approvalMode,
@@ -134,5 +134,5 @@ app.post("/api/environment/reset", requirePassword, (_req, res) => {
 app.listen(config.agentPort, () => {
   if (config.demoPassword) console.log("Demo mode: password required for runs, approvals and reset.");
   console.log(`AI Task Worker UI → http://localhost:${config.agentPort}`);
-  console.log(`LLM: ${config.llm.model} @ ${config.llm.baseUrl}${config.llm.apiKeys.length ? ` (${config.llm.apiKeys.length} key${config.llm.apiKeys.length > 1 ? "s, round-robin" : ""})` : "  (no LLM_API_KEY set!)"}`);
+  console.log(`LLM: ${config.llm.models.join(" → ")} @ ${config.llm.baseUrl}${config.llm.apiKeys.length ? ` (${config.llm.apiKeys.length} key${config.llm.apiKeys.length > 1 ? "s, round-robin" : ""})` : "  (no LLM_API_KEY set!)"}`);
 });

@@ -21,7 +21,8 @@ export const config = {
     baseUrl: env("LLM_BASE_URL", "https://api.groq.com/openai/v1").replace(/\/$/, ""),
     /** One key, or several comma-separated keys used round-robin with rate-limit cooldowns. */
     apiKeys: env("LLM_API_KEY", "").split(",").map((k) => k.trim()).filter(Boolean),
-    model: env("LLM_MODEL", "openai/gpt-oss-120b"),
+    /** One model, or several comma-separated in priority order (fallbacks when the first is rate-limited). */
+    models: env("LLM_MODEL", "openai/gpt-oss-120b").split(",").map((m) => m.trim()).filter(Boolean),
   },
   approvalMode: env("APPROVAL_MODE", "risky") as ApprovalMode,
   maxSteps: Number(env("MAX_STEPS", "40")),

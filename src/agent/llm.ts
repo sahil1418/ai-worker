@@ -52,83 +52,96 @@ function retryDelayMs(res: Response, body: string, attempt: number): number {
 }
 
 /**
- * Pool of API keys used round-robin. A key that hits a rate limit is put on cooldown for the time the
- * provider asks for, and the next available key is used immediately; a key rejected with 401 is dropped.
- * Only helps when keys have separate quotas (provider limits are usually per organisation, not per key).
+ * Pool of (API key × model) routes. Models are in priority order: the first model is used, rotating
+ * round-robin across all keys; only when every key is rate-limited for it does the next model take over.
+ * A rate-limited route is parked for the time the provider asks for; a key rejected with 401 is dropped
+ * everywhere; a model the provider doesn't know (404) is dropped for all keys.
+ * Extra keys only help when they have separate quotas (limits are usually per organisation); Groq's
+ * limits are also per model, so a fallback model is a legitimate source of extra quota.
  * Keys are identified as "key #n" in messages, never printed.
  */
-export class KeyPool {
-  private coolUntil: number[];
-  private dead: boolean[];
-  private cursor = 0;
+export class LLMPool {
+  private routes: { keyIndex: number; key: string; model: string; coolUntil: number; dead: boolean }[] = [];
+  private cursor = new Map<string, number>();
 
-  constructor(private keys: string[]) {
-    if (!keys.length) this.keys = [""];
-    this.coolUntil = this.keys.map(() => 0);
-    this.dead = this.keys.map(() => false);
+  constructor(
+    keys: string[],
+    readonly models: string[],
+  ) {
+    const ks = keys.length ? keys : [""];
+    for (const model of models) ks.forEach((key, keyIndex) => this.routes.push({ keyIndex, key, model, coolUntil: 0, dead: false }));
+  }
+
+  get keyCount() {
+    return new Set(this.routes.map((r) => r.keyIndex)).size;
   }
 
   get size() {
-    return this.keys.length;
+    return this.routes.length;
   }
 
-  /** Next live key in round-robin order that is not cooling down, else the one that frees up soonest. */
-  acquire(now = Date.now()): { index: number; key: string; waitMs: number } {
-    const live = this.keys.map((_, i) => i).filter((i) => !this.dead[i]);
-    if (!live.length) throw new Error("All LLM API keys were rejected (401). Check LLM_API_KEY in .env.");
-    for (let n = 0; n < this.keys.length; n++) {
-      const i = (this.cursor + n) % this.keys.length;
-      if (!this.dead[i] && this.coolUntil[i] <= now) {
-        this.cursor = (i + 1) % this.keys.length;
-        return { index: i, key: this.keys[i], waitMs: 0 };
-      }
+  /** Highest-priority model with a free route (round-robin across its keys), else the route that frees up soonest. */
+  acquire(now = Date.now()): { route: number; key: string; keyIndex: number; model: string; waitMs: number } {
+    const live = this.routes.map((r, i) => ({ r, i })).filter(({ r }) => !r.dead);
+    if (!live.length) throw new Error("No usable LLM key/model left (all rejected). Check LLM_API_KEY and LLM_MODEL in .env.");
+    for (const model of this.models) {
+      const free = live.filter(({ r }) => r.model === model && r.coolUntil <= now);
+      if (!free.length) continue;
+      const c = this.cursor.get(model) ?? 0;
+      const pick = free.find(({ r }) => r.keyIndex >= c) ?? free[0];
+      this.cursor.set(model, pick.r.keyIndex + 1);
+      return { route: pick.i, key: pick.r.key, keyIndex: pick.r.keyIndex, model, waitMs: 0 };
     }
-    const i = live.reduce((a, b) => (this.coolUntil[b] < this.coolUntil[a] ? b : a));
-    this.cursor = (i + 1) % this.keys.length;
-    return { index: i, key: this.keys[i], waitMs: this.coolUntil[i] - now };
+    const soonest = live.reduce((a, b) => (b.r.coolUntil < a.r.coolUntil ? b : a));
+    return { route: soonest.i, key: soonest.r.key, keyIndex: soonest.r.keyIndex, model: soonest.r.model, waitMs: soonest.r.coolUntil - now };
   }
 
-  cooldown(index: number, ms: number, now = Date.now()) {
-    this.coolUntil[index] = Math.max(this.coolUntil[index], now + ms);
+  cooldown(route: number, ms: number, now = Date.now()) {
+    this.routes[route].coolUntil = Math.max(this.routes[route].coolUntil, now + ms);
   }
 
-  /** Returns true if other live keys remain. */
-  kill(index: number): boolean {
-    this.dead[index] = true;
-    return this.dead.some((d) => !d);
+  /** Drop a key (401) or a model (404) everywhere. Returns true if usable routes remain. */
+  kill(what: { keyIndex: number } | { model: string }): boolean {
+    for (const r of this.routes) if ("keyIndex" in what ? r.keyIndex === what.keyIndex : r.model === what.model) r.dead = true;
+    return this.routes.some((r) => !r.dead);
   }
 }
 
 export class OpenAICompatibleLLM implements LLM {
-  private pool: KeyPool;
+  private pool: LLMPool;
 
   constructor(
     private baseUrl = config.llm.baseUrl,
     apiKeys: string[] = config.llm.apiKeys,
-    private model = config.llm.model,
+    models: string[] = config.llm.models,
     private fetchImpl: typeof fetch = fetch,
   ) {
-    this.pool = new KeyPool(apiKeys);
+    this.pool = new LLMPool(apiKeys, models);
   }
 
   async chat(messages: ChatMessage[], tools: ToolSpec[], { onWait, forceTool }: ChatOptions = {}): Promise<ChatResponse> {
-    // Each key gets a fair number of rate-limit retries before we give up.
+    // Each route gets a fair number of rate-limit retries before we give up.
     const maxAttempts = 6 * this.pool.size;
     const tool_choice = forceTool ? { type: "function", function: { name: forceTool } } : "auto";
-    const label = (i: number) => (this.pool.size > 1 ? ` (key #${i + 1})` : "");
+    const multi = this.pool.size > 1;
+    const label = (keyIndex: number, model: string) =>
+      multi ? ` (${this.pool.keyCount > 1 ? `key #${keyIndex + 1}, ` : ""}${model})` : "";
     let networkErrors = 0;
+    let lastModel: string | undefined;
     for (let attempt = 0; ; attempt++) {
-      const { index, key, waitMs } = this.pool.acquire();
+      const { route, key, keyIndex, model, waitMs } = this.pool.acquire();
       if (waitMs > 0) {
-        onWait?.(`Rate limited${this.pool.size > 1 ? " on all keys" : " by LLM provider"}; waiting ${(waitMs / 1000).toFixed(1)}s`);
+        onWait?.(`Rate limited${multi ? " on every key/model" : " by LLM provider"}; waiting ${(waitMs / 1000).toFixed(1)}s`);
         await sleep(waitMs);
       }
+      if (lastModel && model !== lastModel) onWait?.(`Switching to fallback model ${model}`);
+      lastModel = model;
       let res: Response;
       try {
         res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${key || "none"}` },
-          body: JSON.stringify({ model: this.model, messages, tools, tool_choice, temperature: 0.2 }),
+          body: JSON.stringify({ model, messages, tools, tool_choice, temperature: 0.2 }),
           signal: AbortSignal.timeout(180_000),
         });
       } catch (err) {
@@ -148,23 +161,30 @@ export class OpenAICompatibleLLM implements LLM {
         throw new ToolFormatError(body.slice(0, 500));
       }
       if (res.status === 401) {
-        if (this.pool.kill(index)) {
-          onWait?.(`LLM key #${index + 1} was rejected (401); dropping it and using the next key`);
+        if (this.pool.kill({ keyIndex })) {
+          onWait?.(`LLM key #${keyIndex + 1} was rejected (401); dropping it`);
           continue;
         }
         throw new Error(`LLM auth failed (401). Set LLM_API_KEY in .env. ${body.slice(0, 200)}`);
+      }
+      if (res.status === 404 && /model/i.test(body)) {
+        if (this.pool.kill({ model })) {
+          onWait?.(`Model ${model} is not available at this provider; dropping it`);
+          continue;
+        }
+        throw new Error(`LLM model not found: ${model}. Check LLM_MODEL. ${body.slice(0, 200)}`);
       }
       const transient = res.status === 429 || res.status >= 500;
       if (!transient || attempt >= maxAttempts - 1) throw new Error(`LLM request failed: HTTP ${res.status} ${body.slice(0, 400)}`);
       const delay = retryDelayMs(res, body, attempt % 6);
       if (res.status === 429) {
-        // Park this key; the next acquire() moves on to another key right away if one is free.
-        this.pool.cooldown(index, delay);
+        // Park this route; the next acquire() moves on to another key or fallback model right away if one is free.
+        this.pool.cooldown(route, delay);
         if (/per day|TPD|RPD/i.test(body))
-          onWait?.(`Daily LLM quota${label(index)} nearly used up; the provider asks to wait ${(delay / 60000).toFixed(1)} min. Add another key or switch LLM_MODEL to continue sooner.`);
-        if (this.pool.size > 1) onWait?.(`Rate limited${label(index)}; switching key`);
+          onWait?.(`Daily LLM quota${label(keyIndex, model)} nearly used up; the provider asks to wait ${(delay / 60000).toFixed(1)} min${multi ? "" : ". Add another key or a fallback LLM_MODEL to continue sooner"}.`);
+        else if (multi) onWait?.(`Rate limited${label(keyIndex, model)}; trying the next key/model`);
       } else {
-        onWait?.(`LLM provider error ${res.status}${label(index)}; waiting ${(delay / 1000).toFixed(1)}s`);
+        onWait?.(`LLM provider error ${res.status}${label(keyIndex, model)}; waiting ${(delay / 1000).toFixed(1)}s`);
         await sleep(delay);
       }
     }

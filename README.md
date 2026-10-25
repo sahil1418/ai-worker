@@ -48,7 +48,7 @@ Other ways to run:
 | `npm start` | Web UI + mock company. Pick an example task or type your own. |
 | `npm run task -- "your task"` | Same agent in the terminal; approvals/questions answered inline. |
 | `npm run mockco` | Only the simulated company (browse it at http://localhost:4000). |
-| `npm test` | 21 tests: mock company rules + agent loop end-to-end with a scripted model. |
+| `npm test` | 25 tests: mock company rules + agent loop end-to-end with a scripted model. |
 | `npm run typecheck` | TypeScript check. |
 
 `LLM_API_KEY` also accepts several comma-separated keys: they're used round-robin, and a rate-limited key
@@ -182,7 +182,7 @@ No agent code is specific to any of these tasks.
 
 ## Testing
 
-`npm test` runs 21 tests in ~10 s. The agent tests use a **scripted model** that replays fixed tool
+`npm test` runs 25 tests in ~10 s. The agent tests use a **scripted model** that replays fixed tool
 calls, so everything else is the real code running against the mock company: the loop, approval gate,
 recovery, browser and verifier. They cover the 503 retry without duplicating, format-error repair,
 filling the real form in Chromium with only the submit gated, rejection handling, `ask_user`, the loop

@@ -135,7 +135,7 @@ export async function runTask(run: Run, llm: LLM = new OpenAICompatibleLLM()): P
     return result;
   };
 
-  run.emitEvent({ type: "status", status: "started", detail: `model=${config.llm.model} approval=${run.approvalMode}` }, "system");
+  run.emitEvent({ type: "status", status: "started", detail: `model=${config.llm.models.join(" → ")} approval=${run.approvalMode}` }, "system");
   try {
     for (step = 1; step <= config.maxSteps; step++) {
       if (run.cancelled) return done("cancelled", "Run cancelled by the user.");
