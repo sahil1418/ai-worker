@@ -212,7 +212,9 @@ interface FinalResult { outcome; summary; evidence: string[]; verification?; ste
 - **Retry policy:** network error → up to 3 attempts with exponential back-off; HTTP 429/5xx → up to 6
   attempts, delay from `retry-after` header, else parsed from Groq's "try again in 1m3.5s" text, else
   `min(30s, 2^attempt s)`; emits `status: waiting_llm` events while waiting.
-- **Key pool:** `LLM_API_KEY` may be comma-separated. `KeyPool` hands out keys round-robin; on 429 the key
+- **Key × model pool (`LLMPool`):** `LLM_API_KEY` and `LLM_MODEL` may be comma-separated; models are in
+  priority order and the next model is used only when every key is parked on the previous one (Groq quotas
+  are per model). A 404 "model not found" drops that model. Keys rotate round-robin; on 429 the key
   is parked for the provider's retry delay and the next free key is used *immediately* (no sleep); only
   when every key is parked does the client wait for the soonest one. A 401 drops that key (fails only if
   none remain). Keys appear in logs as "key #n", never in plain text. Caveat: provider limits are often
@@ -412,7 +414,7 @@ side panel with live plan (goal, criteria, step statuses) and working memory. Li
 - `mockco.test.ts` (5): invoice totals, chaos 503 then success, format validation, duplicate detection, UI error re-render keeps values.
 - `agent.test.ts` (8): API path with 503 + check-before-retry + 422 format repair + 3 approvals + verified; browser path filling the real form with only the submit gated (reason mentions POST form) and screenshots; rejection respected; ask_user round-trip; loop guard hint; false completion caught twice → `unverified`; verifier read-only; external URLs blocked.
 - Plus: a `finish` written as text JSON is recognised; the first turn forces `update_plan` via `tool_choice`.
-- Status: **21/21 passing** (incl. snapshot truncation, form values in approvals, recovery hint, verifier not anchored on worker criteria).
+- Status: **25/25 passing** (incl. snapshot truncation, form values in approvals, recovery hint, verifier not anchored on worker criteria).
 
 ### 9.1 Live-model results (Groq, `openai/gpt-oss-120b`, free tier)
 

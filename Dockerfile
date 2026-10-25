@@ -17,6 +17,7 @@ USER 1000
 # Secret to set on the host: LLM_API_KEY (optionally DEMO_PASSWORD to gate runs).
 ENV PORT=7860 \
     PUBLIC_DEMO=true \
+    LLM_MODEL=openai/gpt-oss-120b,llama-3.3-70b-versatile \
     MOCKCO_PORT=4000 \
     LOW_MEMORY=true \
     HEADLESS=true \

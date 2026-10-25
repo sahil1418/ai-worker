@@ -51,9 +51,11 @@ Other ways to run:
 | `npm test` | 25 tests: mock company rules + agent loop end-to-end with a scripted model. |
 | `npm run typecheck` | TypeScript check. |
 
-`LLM_API_KEY` also accepts several comma-separated keys: they're used round-robin, and a rate-limited key
-is parked while the next one takes over. This only helps if the keys have separate quotas (Groq's limits
-are per organisation).
+`LLM_API_KEY` also accepts several comma-separated keys, and `LLM_MODEL` several comma-separated models in
+priority order (default: `openai/gpt-oss-120b,llama-3.3-70b-versatile`). The first model is used across all
+keys round-robin; a rate-limited key/model is parked while the next takes over, and the fallback model is
+used only when every key is limited on the primary one. Extra keys only help if they have separate quotas
+(Groq's limits are per organisation); Groq's limits are also per model, so the fallback model adds real quota.
 
 Set `HEADLESS=false` to watch the browser work.
 
