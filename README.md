@@ -57,11 +57,13 @@ Set `HEADLESS=false` to watch the browser work.
 ### Hosted demo (Render, free tier)
 
 The repo includes a `Dockerfile` (Playwright image with Chromium) and a `render.yaml` blueprint. On
-[Render](https://render.com): **New → Blueprint**, pick this repo, and set the two secrets
-`LLM_API_KEY` and `DEMO_PASSWORD`. In hosted mode:
+[Render](https://render.com): **New → Blueprint**, pick this repo, and set the secret `LLM_API_KEY`.
+In hosted mode:
 
-- one public URL serves the UI and the company apps, which are read-only for visitors;
-- watching runs is open, but starting a run, approving and resetting need `DEMO_PASSWORD`;
+- one public URL serves the UI and the company apps; the company apps are read-only for visitors,
+  so only the AI worker changes data;
+- anyone can start runs, so a busy demo can use up the free LLM quota (optionally set
+  `DEMO_PASSWORD` to require a password for starting runs, approving and resetting);
 - one run at a time, since all visitors share one mock company and one LLM quota;
 - Chromium runs with low-memory flags to fit the free 512 MB instance, which sleeps after 15 min idle
   (the first request after that takes about a minute). Use **Reset environment** in the UI to restore seed data.

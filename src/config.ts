@@ -32,7 +32,9 @@ export const config = {
   lowMemory: env("LOW_MEMORY", "false") === "true",
   mockcoPort: Number(env("MOCKCO_PORT", "4000")),
   chaos: env("MOCKCO_CHAOS", "true") !== "false",
-  /** When set (hosted demo), starting runs / approving / resetting requires this password. */
+  /** Hosted demo: the company apps served on the public port are read-only for visitors. */
+  publicDemo: env("PUBLIC_DEMO", "false") === "true",
+  /** Optional: when set, starting runs / approving / resetting requires this password. */
   demoPassword: env("DEMO_PASSWORD", ""),
   /** Hosted demo: limit simultaneous runs (they share one mock company and one LLM quota). 0 = unlimited. */
   maxConcurrentRuns: Number(env("MAX_CONCURRENT_RUNS", "0")),

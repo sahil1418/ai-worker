@@ -19,7 +19,7 @@ const app = express();
 // port. The agent itself still talks to the mock company on its own internal port.
 app.use((req, res, next) => {
   if (!/^\/(mail|erp|chat)(\/|$)/.test(req.path)) return next();
-  if (config.demoPassword && req.method !== "GET")
+  if ((config.publicDemo || config.demoPassword) && req.method !== "GET")
     return void res.status(403).send("The company apps are read-only for visitors of the public demo. Ask the AI worker to make changes.");
   mockco.app(req, res, next);
 });

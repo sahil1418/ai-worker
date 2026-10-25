@@ -10,5 +10,3 @@ services:
     envVars:
       - key: LLM_API_KEY      # your Groq key (secret, entered in the Render dashboard)
         sync: false
-      - key: DEMO_PASSWORD    # password visitors need to start runs / approve / reset
-        sync: false

@@ -14,8 +14,9 @@ USER 1000
 
 # One public port (UI + read-only company apps); the mock company's API stays internal on 4000.
 # PORT is replaced by hosts that inject their own (Render sets 10000).
-# Secrets to set on the host: LLM_API_KEY and DEMO_PASSWORD.
+# Secret to set on the host: LLM_API_KEY (optionally DEMO_PASSWORD to gate runs).
 ENV PORT=7860 \
+    PUBLIC_DEMO=true \
     MOCKCO_PORT=4000 \
     LOW_MEMORY=true \
     HEADLESS=true \
