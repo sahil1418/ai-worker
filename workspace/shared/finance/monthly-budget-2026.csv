@@ -1,0 +1,7 @@
+department,month,budget_usd,spent_usd
+Operations,2026-09,40000,38120
+Operations,2026-10,40000,21400
+Maintenance,2026-09,15000,9800
+Maintenance,2026-10,15000,4250
+IT,2026-09,8000,7900
+IT,2026-10,8000,3100

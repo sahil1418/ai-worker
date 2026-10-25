@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Task Worker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">AI Task Worker <span class="muted">prototype</span></div>
+    <div class="topbar-right">
+      <span id="model" class="badge"></span>
+      <a id="mockco-link" target="_blank" rel="noopener">Open Northwind Ops ↗</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <form id="task-form" class="card">
+        <label for="task">What should I do?</label>
+        <textarea id="task" rows="5" placeholder="Describe the outcome you want…" required></textarea>
+        <div class="examples" id="examples"></div>
+        <div class="row">
+          <label for="approval" class="inline">Ask before</label>
+          <select id="approval">
+            <option value="risky">risky actions</option>
+            <option value="always">every change</option>
+            <option value="never">nothing (autonomous)</option>
+          </select>
+        </div>
+        <button type="submit" id="run-btn">Run task</button>
+        <p id="key-warning" class="warn" hidden>No LLM API key configured. Copy <code>.env.example</code> to <code>.env</code> and set <code>LLM_API_KEY</code>.</p>
+      </form>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Runs</span>
+          <button class="link" id="reset-env" title="Restore the mock company to its seed data">Reset environment</button>
+        </div>
+        <ul id="history" class="history"></ul>
+      </div>
+    </aside>
+
+    <main id="main">
+      <div id="empty" class="empty">
+        <h2>Give the worker a task</h2>
+        <p>It plans, operates the company's apps (browser, API and files), recovers from errors, asks you when it shouldn't guess, and has an independent verifier confirm the result.</p>
+      </div>
+
+      <section id="run" hidden>
+        <div class="run-head">
+          <div>
+            <div class="muted small" id="run-id"></div>
+            <h2 id="run-task"></h2>
+          </div>
+          <div class="run-actions">
+            <span id="run-status" class="pill"></span>
+            <button id="cancel-btn" class="secondary" hidden>Stop</button>
+          </div>
+        </div>
+
+        <div id="result"></div>
+
+        <div class="grid">
+          <div class="timeline-col">
+            <h3>Activity</h3>
+            <ol id="timeline" class="timeline"></ol>
+          </div>
+          <div class="side-col">
+            <div class="card">
+              <div class="card-title"><span>Plan</span></div>
+              <div id="plan" class="muted small">Waiting for plan…</div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span>Working memory</span></div>
+              <dl id="memory" class="memory"><span class="muted small">Nothing yet.</span></dl>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

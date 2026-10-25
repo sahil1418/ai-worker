@@ -1,0 +1,6 @@
+node_modules/
+.env
+runs/
+workspace/output/*
+!workspace/output/.gitkeep
+*.log
