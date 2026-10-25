@@ -52,7 +52,19 @@ Other ways to run:
 is parked while the next one takes over. This only helps if the keys have separate quotas (Groq's limits
 are per organisation).
 
-Set `HEADLESS=false` to watch the browser work. Use **Reset environment** in the UI to restore seed data.
+Set `HEADLESS=false` to watch the browser work.
+
+### Hosted demo (Render, free tier)
+
+The repo includes a `Dockerfile` (Playwright image with Chromium) and a `render.yaml` blueprint. On
+[Render](https://render.com): **New → Blueprint**, pick this repo, and set the two secrets
+`LLM_API_KEY` and `DEMO_PASSWORD`. In hosted mode:
+
+- one public URL serves the UI and the company apps, which are read-only for visitors;
+- watching runs is open, but starting a run, approving and resetting need `DEMO_PASSWORD`;
+- one run at a time, since all visitors share one mock company and one LLM quota;
+- Chromium runs with low-memory flags to fit the free 512 MB instance, which sleeps after 15 min idle
+  (the first request after that takes about a minute). Use **Reset environment** in the UI to restore seed data.
 
 ### Example tasks (in the UI)
 

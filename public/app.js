@@ -19,8 +19,31 @@ let currentId = null;
 let source = null;
 let callNodes = new Map();
 
-async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { "content-type": "application/json" }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
+const PW_KEY = "demo-password";
+const storedPassword = () => {
+  try {
+    return localStorage.getItem(PW_KEY) || "";
+  } catch {
+    return "";
+  }
+};
+
+async function api(path, opts = {}, retried = false) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { "content-type": "application/json", "x-demo-password": storedPassword() },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (res.status === 401 && !retried) {
+    // Hosted demo: ask once, remember it in this browser, retry.
+    const pw = prompt("This hosted demo needs a password to run tasks, approve actions or reset.\nPassword:");
+    if (pw) {
+      try {
+        localStorage.setItem(PW_KEY, pw);
+      } catch {}
+      return api(path, opts, true);
+    }
+  }
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
   return res.json();
 }
@@ -31,6 +54,7 @@ async function init() {
   $("#mockco-link").href = cfg.mockcoUrl;
   $("#approval").value = cfg.approvalMode;
   $("#key-warning").hidden = cfg.hasApiKey;
+  $("#demo-note").hidden = !cfg.passwordRequired;
 
   for (const ex of EXAMPLES) {
     const b = document.createElement("button");

@@ -1,6 +1,7 @@
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { config, mockcoUrl, ROOT } from "../config.js";
 import { createMockco } from "../mockco/app.js";
 import { Run, runTask } from "../agent/worker.js";
@@ -13,7 +14,26 @@ mockco.app.listen(config.mockcoPort, () => console.log(`Northwind Ops (mock comp
 
 const runs = new Map<string, Run>();
 const app = express();
+
+// Serve the mock company's UI through this same port too, so a hosted deployment needs only one public
+// port. The agent itself still talks to the mock company on its own internal port.
+app.use((req, res, next) => {
+  if (!/^\/(mail|erp|chat)(\/|$)/.test(req.path)) return next();
+  if (config.demoPassword && req.method !== "GET")
+    return void res.status(403).send("The company apps are read-only for visitors of the public demo. Ask the AI worker to make changes.");
+  mockco.app(req, res, next);
+});
+
 app.use(express.json());
+
+/** Hosted demo: everything is viewable, but anything that spends LLM quota or changes state needs the password. */
+function requirePassword(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!config.demoPassword) return next();
+  const given = Buffer.from(String(req.get("x-demo-password") ?? ""));
+  const expected = Buffer.from(config.demoPassword);
+  if (given.length === expected.length && crypto.timingSafeEqual(given, expected)) return next();
+  res.status(401).json({ error: "Demo password required." });
+}
 app.use(express.static(path.join(ROOT, "public")));
 app.use("/runs", express.static(config.runsDir));
 
@@ -23,7 +43,8 @@ app.get("/api/config", (_req, res) => {
     llmHost: new URL(config.llm.baseUrl).host,
     hasApiKey: config.llm.apiKeys.length > 0 || /localhost|127\.0\.0\.1/.test(config.llm.baseUrl),
     approvalMode: config.approvalMode,
-    mockcoUrl: mockcoUrl(),
+    mockcoUrl: "/mail",
+    passwordRequired: !!config.demoPassword,
     maxSteps: config.maxSteps,
   });
 });
@@ -47,9 +68,13 @@ function listRuns() {
 
 app.get("/api/tasks", (_req, res) => res.json(listRuns()));
 
-app.post("/api/tasks", (req, res) => {
+app.post("/api/tasks", requirePassword, (req, res) => {
   const task = String(req.body?.task ?? "").trim();
   if (!task) return void res.status(400).json({ error: "task is required" });
+  if (task.length > 2000) return void res.status(400).json({ error: "task is too long (max 2000 characters)" });
+  const active = [...runs.values()].filter((r) => r.status !== "done").length;
+  if (config.maxConcurrentRuns && active >= config.maxConcurrentRuns)
+    return void res.status(409).json({ error: "Another run is in progress. Watch it in the Runs list, or wait for it to finish." });
   const mode = (["risky", "always", "never"].includes(req.body?.approvalMode) ? req.body.approvalMode : config.approvalMode) as ApprovalMode;
   const run = new Run(task, mode);
   runs.set(run.id, run);
@@ -85,21 +110,21 @@ app.get("/api/tasks/:id/stream", (req, res) => {
   });
 });
 
-app.post("/api/tasks/:id/respond", (req, res) => {
+app.post("/api/tasks/:id/respond", requirePassword, (req, res) => {
   const run = runs.get(req.params.id);
   if (!run) return void res.status(404).json({ error: "run not found or already finished" });
   const { requestId, approved, comment, answer } = req.body ?? {};
   run.respond(String(requestId), { approved, comment, answer }) ? res.json({ ok: true }) : res.status(409).json({ error: "no such pending request" });
 });
 
-app.post("/api/tasks/:id/cancel", (req, res) => {
+app.post("/api/tasks/:id/cancel", requirePassword, (req, res) => {
   const run = runs.get(req.params.id);
   if (!run) return void res.status(404).json({ error: "run not found" });
   run.cancel();
   res.json({ ok: true });
 });
 
-app.post("/api/environment/reset", (_req, res) => {
+app.post("/api/environment/reset", requirePassword, (_req, res) => {
   mockco.reset();
   const out = path.join(config.workspaceDir, "output");
   for (const f of fs.existsSync(out) ? fs.readdirSync(out) : []) if (f !== ".gitkeep") fs.rmSync(path.join(out, f), { recursive: true, force: true });
@@ -107,6 +132,7 @@ app.post("/api/environment/reset", (_req, res) => {
 });
 
 app.listen(config.agentPort, () => {
+  if (config.demoPassword) console.log("Demo mode: password required for runs, approvals and reset.");
   console.log(`AI Task Worker UI → http://localhost:${config.agentPort}`);
   console.log(`LLM: ${config.llm.model} @ ${config.llm.baseUrl}${config.llm.apiKeys.length ? ` (${config.llm.apiKeys.length} key${config.llm.apiKeys.length > 1 ? "s, round-robin" : ""})` : "  (no LLM_API_KEY set!)"}`);
 });

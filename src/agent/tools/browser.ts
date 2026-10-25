@@ -9,7 +9,9 @@ const SNAPSHOT_LIMIT = 4500;
 const STATE_CHANGING_WORDS = /\b(submit|save|send|post|delete|remove|pay|approve|confirm|transfer|purchase|create|update)\b/i;
 
 let sharedBrowser: Promise<Browser> | undefined;
-const getBrowser = () => (sharedBrowser ??= chromium.launch({ headless: config.headless }));
+// Memory-saving flags for tiny hosts: no /dev/shm (often 64 MB in containers), no GPU, one renderer process.
+const LOW_MEMORY_ARGS = ["--disable-dev-shm-usage", "--disable-gpu", "--renderer-process-limit=1", "--disable-extensions", "--no-zygote"];
+const getBrowser = () => (sharedBrowser ??= chromium.launch({ headless: config.headless, args: config.lowMemory ? LOW_MEMORY_ARGS : [] }));
 
 export async function closeSharedBrowser() {
   if (sharedBrowser) await (await sharedBrowser).close().catch(() => {});

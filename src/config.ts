@@ -26,9 +26,16 @@ export const config = {
   approvalMode: env("APPROVAL_MODE", "risky") as ApprovalMode,
   maxSteps: Number(env("MAX_STEPS", "40")),
   headless: env("HEADLESS", "true") !== "false",
-  agentPort: Number(env("AGENT_PORT", "3000")),
+  // Hosts like Render inject PORT; AGENT_PORT wins when both are set.
+  agentPort: Number(env("AGENT_PORT", env("PORT", "3000"))),
+  /** Small hosts (e.g. 512 MB free tiers): launch Chromium with memory-saving flags. */
+  lowMemory: env("LOW_MEMORY", "false") === "true",
   mockcoPort: Number(env("MOCKCO_PORT", "4000")),
   chaos: env("MOCKCO_CHAOS", "true") !== "false",
+  /** When set (hosted demo), starting runs / approving / resetting requires this password. */
+  demoPassword: env("DEMO_PASSWORD", ""),
+  /** Hosted demo: limit simultaneous runs (they share one mock company and one LLM quota). 0 = unlimited. */
+  maxConcurrentRuns: Number(env("MAX_CONCURRENT_RUNS", "0")),
   /** Sandbox root for the file tools. The agent cannot read or write outside it. */
   workspaceDir: path.join(ROOT, "workspace"),
   runsDir: env("RUNS_DIR", path.join(ROOT, "runs")),
